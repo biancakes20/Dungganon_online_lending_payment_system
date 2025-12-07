@@ -7,7 +7,7 @@
 5. Member 5 - James Sialana
 
 
-Short instruction to run our system:
+Short instruction to run our system: admin account: juvi@gmail.com - Password: Qwerty12
 "To run our system: First, click Apply Now/Login or Get Started Today. Then, choose whether to Sign Up or Sign In. After signing in,
 if you are an admin, you will be redirected to the Admin Homepage; if you are a client, you will be redirected to the Client Homepage."
 

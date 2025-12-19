@@ -4,7 +4,6 @@ include('../../Classes/Connection.php');
 include('../../Classes/Client.php'); 
 session_start();
 
-
 if (!isset($_SESSION['id']) || $_SESSION['id'] != 1) {
     header("Location: ../../pages/home.php");
     exit();
@@ -36,7 +35,6 @@ body { background-color: #2c3e50; color: #ecf0f1; }
 
 <div class="container-fluid">
     <div class="row">
-        
         <div class="col-md-2 sidebar p-0">
             <h4 class="text-center py-3 border-bottom text-primary">Dungganon Admin</h4>
             <div class="list-group list-group-flush">
@@ -44,7 +42,6 @@ body { background-color: #2c3e50; color: #ecf0f1; }
             </div>
         </div>
 
-        
         <div class="col-md-10 p-4">
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h2 class="text-primary">Borrower Management</h2>
@@ -55,9 +52,7 @@ body { background-color: #2c3e50; color: #ecf0f1; }
                 <div class="col-lg-12">
                     <div class="card p-3">
                         <h4 class="card-title mb-3">Payments List</h4>
-                        <div class="table-responsive" id="paymentsTable">
-                            
-                        </div>
+                        <div class="table-responsive" id="paymentsTable"></div>
                     </div>
                 </div>
             </div>
@@ -65,12 +60,12 @@ body { background-color: #2c3e50; color: #ecf0f1; }
     </div>
 </div>
 
-
+<!-- EDIT PAYMENT MODAL -->
 <div class="modal fade" id="editPaymentModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog">
     <div class="modal-content bg-dark text-white">
       <div class="modal-header">
-        <h5 class="modal-title">Edit Payment</h5>
+        <h5 class="modal-title">Edit Payment Amount</h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
@@ -78,15 +73,15 @@ body { background-color: #2c3e50; color: #ecf0f1; }
           <input type="hidden" id="edit_t_id">
           <div class="mb-2">
             <label>Name</label>
-            <input type="text" id="edit_name" class="form-control">
+            <input type="text" id="edit_name" class="form-control" disabled>
           </div>
           <div class="mb-2">
             <label>Address</label>
-            <input type="text" id="edit_address" class="form-control">
+            <input type="text" id="edit_address" class="form-control" disabled>
           </div>
           <div class="mb-2">
             <label>Contact</label>
-            <input type="text" id="edit_contact" class="form-control">
+            <input type="text" id="edit_contact" class="form-control" disabled>
           </div>
           <div class="mb-2">
             <label>Amount</label>
@@ -103,7 +98,6 @@ body { background-color: #2c3e50; color: #ecf0f1; }
 </div>
 
 <script>
-
 function loadPayments() {
     $.ajax({
         url: '../../handlers/admin_payments.php',
@@ -113,7 +107,6 @@ function loadPayments() {
         }
     });
 }
-
 
 function deletePayment(t_id) {
     if (!confirm('Delete this payment?')) return;
@@ -129,7 +122,6 @@ function deletePayment(t_id) {
     });
 }
 
-
 function updateStatus(t_id) {
     const status = $('#status_'+t_id).val();
     $.ajax({
@@ -143,7 +135,6 @@ function updateStatus(t_id) {
         }
     });
 }
-
 
 function editPayment(t_id) {
     const row = $('#paymentsTable').find('tr').filter(function() {
@@ -159,15 +150,11 @@ function editPayment(t_id) {
     $('#editPaymentModal').modal('show');
 }
 
-
 function saveEdit() {
     const data = {
         action: 'edit',
         t_id: $('#edit_t_id').val(),
-        name: $('#edit_name').val(),
-        address: $('#edit_address').val(),
-        contact: $('#edit_contact').val(),
-        amount: $('#edit_amount').val()
+        amount: $('#edit_amount').val() // only send amount
     };
 
     $.post('../../handlers/admin_payments.php', data, function(response) {
@@ -176,7 +163,6 @@ function saveEdit() {
         loadPayments();
     }, 'json');
 }
-
 
 $(document).ready(function() {
     loadPayments();

@@ -69,5 +69,4 @@ public function payNow($t_id, $id, $name, $add, $contact, $amount)
         return 2;
     }
 }
-
 }

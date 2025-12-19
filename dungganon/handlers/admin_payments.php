@@ -1,80 +1,86 @@
 <?php
-include('../Classes/Connection.php'); 
-include('../Classes/Client.php');    
-
+// Correct includes
+include('../Classes/Connection.php');
+include('../Classes/Client.php');
 $conn = (new Dbh())->connect();
 
+// Handle POST requests (delete, update status, edit amount)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
-    
+    // Delete payment
     if ($action === 'delete') {
-        $stmt = $conn->prepare("DELETE FROM transaction WHERE t_id=?");
-        $stmt->bind_param("i", $_POST['t_id']);
+        $t_id = $_POST['t_id'];
+        $stmt = $conn->prepare("DELETE FROM `transaction` WHERE t_id = ?");
+        $stmt->bind_param("i", $t_id);
         $stmt->execute();
         echo json_encode(['message' => 'Payment deleted successfully']);
         exit();
     }
 
-    
+    // Update status
     if ($action === 'update_status') {
-        $stmt = $conn->prepare("UPDATE transaction SET status=? WHERE t_id=?");
-        $stmt->bind_param("si", $_POST['status'], $_POST['t_id']);
+        $t_id = $_POST['t_id'];
+        $status = $_POST['status'];
+        $stmt = $conn->prepare("UPDATE `transaction` SET status = ? WHERE t_id = ?");
+        $stmt->bind_param("si", $status, $t_id);
         $stmt->execute();
         echo json_encode(['message' => 'Status updated successfully']);
         exit();
     }
 
-   
+    // Edit amount only
     if ($action === 'edit') {
-        $stmt = $conn->prepare("UPDATE transaction SET name=?, address=?, contact=?, amount=? WHERE t_id=?");
-        $stmt->bind_param("sssdi", $_POST['name'], $_POST['address'], $_POST['contact'], $_POST['amount'], $_POST['t_id']);
-        $stmt->execute();
-        echo json_encode(['message' => 'Payment updated successfully']);
+        $t_id = $_POST['t_id'];
+        $amount = $_POST['amount'];
+        $stmt = $conn->prepare("UPDATE `transaction` SET amount = ? WHERE t_id = ?");
+        $stmt->bind_param("di", $amount, $t_id);
+        if ($stmt->execute()) {
+            echo json_encode(['message' => 'Amount updated successfully']);
+        } else {
+            echo json_encode(['message' => 'Failed to update amount']);
+        }
         exit();
     }
 }
 
+// Handle GET request: return payments table
+$stmt = $conn->prepare("SELECT t_id, name, address, contact, amount, status, date FROM `transaction` ORDER BY date DESC");
+$stmt->execute();
+$res = $stmt->get_result();
 
-$result = $conn->query("SELECT * FROM transaction ORDER BY date DESC");
+echo '<table class="table table-bordered text-white">';
+echo '<thead><tr>
+        <th>ID</th>
+        <th>Name</th>
+        <th>Address</th>
+        <th>Contact</th>
+        <th>Amount</th>
+        <th>Status</th>
+        <th>Date</th>
+        <th>Actions</th>
+      </tr></thead><tbody>';
 
-if ($result->num_rows > 0) {
-    echo '<table class="table table-hover text-white">
-            <thead>
-                <tr>
-                    <th>T_ID</th>
-                    <th>Name</th>
-                    <th>Address</th>
-                    <th>Contact</th>
-                    <th>Amount</th>
-                    <th>Status</th>
-                    <th>Date</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>';
-    while ($row = $result->fetch_assoc()) {
-        echo '<tr>
-                <td>'.$row['t_id'].'</td>
-                <td>'.htmlspecialchars($row['name']).'</td>
-                <td>'.htmlspecialchars($row['address']).'</td>
-                <td>'.htmlspecialchars($row['contact']).'</td>
-                <td>'.number_format($row['amount'], 2).'</td>
-                <td>
-                    <select id="status_'.$row['t_id'].'" class="form-select form-select-sm" onchange="updateStatus('.$row['t_id'].')">
-                        <option value="pending" '.($row['status']=='pending'?'selected':'').'>Pending</option>
-                        <option value="approved" '.($row['status']=='approved'?'selected':'').'>Approved</option>
-                        <option value="declined" '.($row['status']=='declined'?'selected':'').'>Declined</option>
-                    </select>
-                </td>
-                <td>'.$row['date'].'</td>
-                <td>
-                    <button class="btn btn-sm btn-primary me-1" onclick="editPayment('.$row['t_id'].')">Edit</button>
-                    <button class="btn btn-sm btn-danger" onclick="deletePayment('.$row['t_id'].')">Delete</button>
-                </td>
-            </tr>';
-    }
-    echo '</tbody></table>';
-} else {
-    echo '<p class="text-center">No payments found.</p>';
+while ($row = $res->fetch_assoc()) {
+    echo '<tr>';
+    echo '<td>'.$row['t_id'].'</td>';
+    echo '<td>'.$row['name'].'</td>';
+    echo '<td>'.$row['address'].'</td>';
+    echo '<td>'.$row['contact'].'</td>';
+    echo '<td>'.number_format($row['amount'],2).'</td>';
+    echo '<td>
+            <select id="status_'.$row['t_id'].'" onchange="updateStatus('.$row['t_id'].')">
+                <option value="pending" '.($row['status']=='pending'?'selected':'').'>Pending</option>
+                <option value="approved" '.($row['status']=='approved'?'selected':'').'>Approved</option>
+                <option value="declined" '.($row['status']=='declined'?'selected':'').'>Declined</option>
+            </select>
+          </td>';
+    echo '<td>'.$row['date'].'</td>';
+    echo '<td>
+            <button class="btn btn-sm btn-primary" onclick="editPayment('.$row['t_id'].')">Edit</button>
+            <button class="btn btn-sm btn-danger" onclick="deletePayment('.$row['t_id'].')">Delete</button>
+          </td>';
+    echo '</tr>';
 }
+
+echo '</tbody></table>';

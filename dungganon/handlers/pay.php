@@ -1,43 +1,40 @@
 <?php
-include('../Classes/Client.php');
-$clients = new Users();
+header('Content-Type: application/json');
+include('../Classes/Connection.php');
+$conn = (new Dbh())->connect();
 
 if (isset($_POST['pay_now'])) {
 
-    $name    = $_POST['name'];
-    $add     = $_POST['add'];
-    $contact = $_POST['contact'];
-    $id      = $_POST['id'];
-    $t_id    = $_POST['t_id'];
-    $amount  = $_POST['amount'];
-    
+    $id      = $_POST['id'] ?? null;
+    $name    = $_POST['name'] ?? '';
+    $add     = $_POST['add'] ?? '';
+    $contact = $_POST['contact'] ?? '';
+    $amount  = $_POST['amount'] ?? 0;
 
- 
-    if (empty($name) || empty($add) || empty($contact)) {
-        $response = array(
-            'error' => "Please fill out all fields."
-        );
-        echo json_encode($response);
-        exit;
+    // Validation
+    if (!$id || !$name || !$add || !$contact || $amount <= 0) {
+        echo json_encode(['error' => 'Please fill in all fields correctly']);
+        exit();
     }
 
-    
-    $pay = $clients->payNow($t_id, $id, $name, $add, $contact, $amount);
+    // Prepare insert query with date and backticks
+    $stmt = $conn->prepare("
+        INSERT INTO `transaction` (id, name, address, contact, amount, status, date)
+        VALUES (?, ?, ?, ?, ?, 'pending', NOW())
+    ");
+    if (!$stmt) {
+        echo json_encode(['error' => 'Prepare failed: ' . $conn->error]);
+        exit();
+    }
 
-    if ($pay == 1) {
-        $response = array(
-            'success' => "Paid Successfully!"
-        );
-    } else if ($pay == 2) {
-        $response = array(
-            'error' => "Please try again"
-        );
+    $stmt->bind_param("isssd", $id, $name, $add, $contact, $amount);
+
+    if ($stmt->execute()) {
+        echo json_encode(['success' => 'Payment submitted. Waiting for approval']);
     } else {
-        $response = array(
-            'error' => "Database error"
-        );
+        echo json_encode(['error' => 'Payment failed: ' . $stmt->error]);
     }
 
-    echo json_encode($response);
-    exit;
+    $stmt->close();
+    $conn->close();
 }

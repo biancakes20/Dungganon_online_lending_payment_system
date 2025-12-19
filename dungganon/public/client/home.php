@@ -1,206 +1,214 @@
 <?php
 session_start();
 
-
-if (!isset($_SESSION['username']) || !isset($_SESSION['id'])) {
-    
+if (!isset($_SESSION['id']) || !isset($_SESSION['username'])) {
+    header("Location: ../login.php");
+    exit();
 }
 
+include('../../Classes/Connection.php');
+$conn = (new Dbh())->connect();
 
-$username = htmlspecialchars($_SESSION['username']);
-$user_id = htmlspecialchars($_SESSION['id']);
+$user_id  = $_SESSION['id'];
+$username = $_SESSION['username'];
+
+/* FIXED LOAN */
+$loan_amount = 5000;
+
+/* TOTAL APPROVED PAYMENTS */
+$stmt = $conn->prepare("
+    SELECT SUM(amount) AS total_paid 
+    FROM `transaction` 
+    WHERE id = ? AND status = 'approved'
+");
+if (!$stmt) {
+    die("Prepare failed: " . $conn->error);
+}
+$stmt->bind_param("i", $user_id);
+$stmt->execute();
+$res = $stmt->get_result();
+$row = $res->fetch_assoc();
+
+$total_paid = $row['total_paid'] ?? 0;
+$balance = $loan_amount - $total_paid;
+$balance = max($balance, 0); // Ensure no negative balance
 ?>
 
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Client Payment Dashboard</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body {
-            background-color: #f4f7f6;
-        }
-        .dashboard-container {
-            padding-top: 50px;
-            padding-bottom: 50px;
-        }
-        .card {
-            margin-bottom: 30px;
-        }
-    </style>
+<meta charset="UTF-8">
+<title>Client Payment Dashboard</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
-<body>
+<body class="bg-light">
 
-<div class="container dashboard-container">
-    <div class="row mb-4 align-items-center">
-        <div class="col-md-9 col-sm-8 text-center text-md-start">
-            <h1 class="text-primary">Payment Portal Dashboard</h1>
-            <p class="lead mb-0">Welcome back, <strong><?php echo $username; ?></strong>. Manage your payments below.</p>
+<div class="container py-5">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4>Payment Dashboard</h4>
+            <p>Welcome, <strong><?php echo htmlspecialchars($username); ?></strong></p>
         </div>
-        <div class="col-md-3 col-sm-4 text-center text-md-end mt-3 mt-md-0">
-            <button id="logoutBtn" class="btn btn-outline-danger">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-box-arrow-right" viewBox="0 0 16 16">
-                    <path fill-rule="evenodd" d="M10 12.5a.5.5 0 0 1-.5.5h-8a.5.5 0 0 1-.5-.5v-9a.5.5 0 0 1 .5-.5h8a.5.5 0 0 1 .5.5v2a.5.5 0 0 0 1 0v-2A1.5 1.5 0 0 0 9.5 2h-8A1.5 1.5 0 0 0 0 3.5v9A1.5 1.5 0 0 0 1.5 14h8a1.5 1.5 0 0 0 1.5-1.5v-2a.5.5 0 0 0-1 0v2z"/>
-                    <path fill-rule="evenodd" d="M15.854 8.354a.5.5 0 0 0 0-.708l-3-3a.5.5 0 1 0-.708.708L14.293 7.5H5.5a.5.5 0 0 0 0 1h8.793l-2.147 2.146a.5.5 0 0 0 .708.708l3-3z"/>
-                </svg>
-                Logout
+        <a href="../../pages/logout.php" class="btn btn-danger">Logout</a>
+    </div>
+
+    <!-- LOAN SUMMARY -->
+    <div class="card mb-4 text-center">
+        <div class="card-body">
+            <h5>Loan Summary</h5>
+            <p><strong>Loan Amount:</strong> ₱<?php echo number_format($loan_amount,2); ?></p>
+            <p><strong>Total Paid:</strong> ₱<?php echo number_format($total_paid,2); ?></p>
+            <p>
+                <strong>Remaining Balance:</strong>
+                <span class="<?php echo $balance == 0 ? 'text-success' : 'text-danger'; ?>">
+                    ₱<?php echo number_format($balance,2); ?>
+                </span>
+            </p>
+        </div>
+    </div>
+
+    <!-- PAY BUTTON -->
+    <div class="card mb-4 text-center">
+        <div class="card-body">
+            <button class="btn btn-success btn-lg"
+                data-bs-toggle="modal"
+                data-bs-target="#paymentModal"
+                <?php echo $balance == 0 ? 'disabled' : ''; ?>>
+                💵 Make Payment
             </button>
         </div>
     </div>
-    <hr>
-    
-    <div class="row">
-        
-        <div class="col-lg-5">
-            <div class="card shadow-sm text-center">
-                <div class="card-body py-5">
-                    <h5 class="card-title mb-4">Ready to Make a Payment?</h5>
-                    <p class="card-text text-muted">Click the button below to securely enter your transaction details.</p>
-                    
-                    <button type="button" class="btn btn-success btn-lg mt-3" 
-                            data-bs-toggle="modal" 
-                            data-bs-target="#paymentModal">
-                        💵 Start New Payment
-                    </button>
-                    
-                    <hr class="my-4">
-                    <p class="mb-0 small">Logged in as: <strong><?php echo $username; ?></strong> (ID: <?php echo $user_id; ?>)</p>
-                </div>
-            </div>
-        </div>
 
+    <!-- PAYMENT HISTORY -->
+    <div class="card">
+        <div class="card-body">
+            <h5>Payment History</h5>
+            <table class="table table-bordered">
+                <thead>
+                    <tr>
+                        <th>Amount</th>
+                        <th>Status</th>
+                        <th>Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                <?php
+                $stmt = $conn->prepare("
+                    SELECT amount, status, date 
+                    FROM `transaction` 
+                    WHERE id = ? 
+                    ORDER BY date DESC
+                ");
+                if (!$stmt) {
+                    die("Prepare failed: " . $conn->error);
+                }
+                $stmt->bind_param("i", $user_id);
+                $stmt->execute();
+                $res = $stmt->get_result();
 
-
-<div class="modal fade" id="paymentModal" tabindex="-1" aria-labelledby="paymentModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            
-            <div class="modal-header bg-success text-white">
-                <h5 class="modal-title" id="paymentModalLabel">Secure Transaction Form</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            
-            <div class="modal-body">
-                <form id="modalPaymentForm">
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Paying As (User ID: <?php echo $user_id; ?>)</label>
-                        <input type="text" class="form-control" value="<?php echo $username; ?>" readonly>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="name" class="form-label">Full Name</label>
-                        <input type="text" class="form-control" id="name" placeholder="Name for Transaction" required>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="address" class="form-label">Address</label>
-                        <input type="text" class="form-control" id="address" placeholder="Billing Address" required>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="contact" class="form-label">Contact</label>
-                        <input type="text" class="form-control" id="contact" placeholder="Contact (e.g., Email/Phone)" required>
-                    </div>
-                    
-                    <div class="mb-4">
-                        <label for="amount" class="form-label">Amount</label>
-                        <input type="number" class="form-control" id="amount" placeholder="0.00" min="0.01" step="0.01" required>
-                    </div>
-                </form>
-            </div>
-            
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                
-                <button type="button" class="btn btn-success btn-pay"
-                    data-id="<?php echo $user_id; ?>"
-                    data-t_id="">
-                    Process Payment
-                </button>
-            </div>
-            
+                if ($res->num_rows > 0) {
+                    while ($row = $res->fetch_assoc()) {
+                        echo "<tr>
+                                <td>₱".number_format($row['amount'],2)."</td>
+                                <td>".htmlspecialchars($row['status'])."</td>
+                                <td>".htmlspecialchars($row['date'])."</td>
+                              </tr>";
+                    }
+                } else {
+                    echo "<tr><td colspan='3' class='text-center'>No payments yet</td></tr>";
+                }
+                ?>
+                </tbody>
+            </table>
         </div>
     </div>
 </div>
 
+<!-- PAYMENT MODAL -->
+<div class="modal fade" id="paymentModal">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5>Make Payment</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body">
+        <div class="mb-2">
+            <label>Full Name</label>
+            <input type="text" id="name" class="form-control">
+        </div>
+        <div class="mb-2">
+            <label>Address</label>
+            <input type="text" id="address"  class="form-control">
+        </div>
+        <div class="mb-2">
+            <label>Contact</label>
+            <input type="text" id="contact"  class="form-control">
+        </div>
+        <div class="mb-2">
+            <label>Amount</label>
+            <input type="number" id="amount" class="form-control" min="1" max="<?php echo $balance; ?>">
+            <small>Remaining: ₱<?php echo number_format($balance,2); ?></small>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-success btn-pay" data-id="<?php echo $user_id; ?>">
+            Pay Now
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="../../assets/js/jquery.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
 <script>
-$(document).ready(function() {
-    
-   
-    function loadPaymentHistory() {
-        console.log("Loading payment history for user ID: <?php echo $user_id; ?>");
-        
+$('.btn-pay').click(function () {
+
+    const name = $('#name').val();
+    const add = $('#address').val();
+    const contact = $('#contact').val();
+    const amount = parseFloat($('#amount').val());
+    const balance = <?php echo $balance; ?>;
+    const id = $(this).data('id');
+
+    if (!name || !add || !contact || isNaN(amount) || amount <= 0) {
+        alert('Please fill in all fields correctly');
+        return;
     }
-    loadPaymentHistory(); 
 
-    
-    $('#logoutBtn').on('click', function() {
-    window.location.href = '../../pages/logout.php';
-});
+    if (amount > balance) {
+        alert('Payment exceeds remaining balance');
+        return;
+    }
 
-
-    
-    $('.btn-pay').on('click', function() {
-        
-        
-        const name = $('#name').val();
-        const add = $('#address').val();
-        const contact = $('#contact').val();
-        const amount = Number($('#amount').val());
-        const id = $(this).data('id');
-        const t_id = $(this).data('t_id');
-        
-        
-        if (!name || !add || !contact || amount <= 0) {
-            alert('Please fill in all details and ensure the amount is greater than zero.');
-            return;
-        }
-
-        console.log(`Processing payment for ${name}, Amount: ${amount}`);
-
-       
-        $.ajax({
-            url: '../../handlers/pay.php',
-            method: "post",
-            data: {
-                'pay_now': true,
-                'name': name,
-                'add': add,
-                'contact': contact,
-                'amount': amount,
-                'id': id,
-                't_id': t_id
-            },
-            dataType: 'json',
-            success: function(response) {
-                
-                $('#paymentModal').modal('hide'); 
-                
-                if (response.success) {
-                    alert(response.success);
-                   
-                    loadPaymentHistory();
-                   
-                    $('#modalPaymentForm')[0].reset(); 
-                } else {
-                    alert("Payment failed: " + response.error);
-                }
-            },
-            error: function(xhr, status, error) {
-                $('#paymentModal').modal('hide'); 
-                console.error("AJAX Error:", status, error);
-                alert("An unexpected error occurred. Please try again.");
+    $.ajax({
+        url: '../../handlers/pay.php',
+        method: 'POST',
+        data: {
+            pay_now: true,
+            name: name,
+            add: add,
+            contact: contact,
+            amount: amount,
+            id: id,
+        },
+        dataType: 'json',
+        success: function(res) {
+            if (res.success) {
+                alert(res.success);
+                location.reload();
+            } else {
+                alert(res.error || 'Payment failed');
             }
-        });
-    });
-    
-   
-    $('#load-history').on('click', function() {
-        loadPaymentHistory();
+        },
+        error: function() {
+            alert('Server error. Please try again.');
+        }
     });
 });
 </script>
